@@ -22,39 +22,41 @@ exports.validateSearchedText = (req, res, next) => {
 exports.getPlaceInfo = (req, res) => {
     const searchText = req.query.name || "".replace(/%20/g, " ");
     PlaceInfo_1.PlaceInfo.findOne({ name: searchText }).exec().then((placeInfo) => {
-        console.log(placeInfo);
         placeInfo ? res.status(200).send(placeInfo) : fetchPlaceInfo(searchText, res).then((place) => {
             res.status(200).send(place);
+        }).catch((err) => {
+            err.code ? res.status(err.code).send({ error: err.message }) : res.status(500).send({ error: err.message });
         });
     }).catch((err) => {
-        res.status(500).send({ error: err.message });
+        err.code ? res.status(err.code).send({ error: err.message }) : res.status(500).send({ error: err.message });
     });
 };
 function fetchPlaceInfo(searchText, res) {
-    const googlePlacePromise = googleMapsClient.places({ query: searchText }).asPromise();
-    const newsPromise = newsapi.v2.everything({ q: searchText, pageSize: 10 });
-    return bluebird_1.default.all([googlePlacePromise, newsPromise]).then((result) => {
-        const googlePlaceResult = result[0];
-        const placeNewsResult = result[1];
+    return googleMapsClient.places({ query: searchText }).asPromise().then((googlePlaceResponse) => {
         let placeInfo = {};
-        const placeList = googlePlaceResult.json.results;
-        if (googlePlaceResult.status == 200 && placeList.length > 0) {
-            const place = placeList[0];
-            placeInfo.name = place.name;
-            placeInfo.loc = {};
-            placeInfo.loc.coordinates = [place.geometry.location.lng, place.geometry.location.lat];
-        }
+        const placeList = googlePlaceResponse.json.results;
+        return (googlePlaceResponse.status == 200 && placeList.length > 0) ? proceedToSearchLocationNews(searchText, placeInfo, placeList)
+            : bluebird_1.default.reject({ message: "Location Info Not Found", code: 404 });
+    }).catch((err) => {
+        return err.code ? bluebird_1.default.reject(err) : bluebird_1.default.reject({ message: "Internal Server Error", code: 500 });
+    });
+}
+function proceedToSearchLocationNews(searchText, placeInfo, placeList) {
+    const place = placeList[0];
+    placeInfo.name = place.name;
+    placeInfo.loc = {};
+    placeInfo.loc.coordinates = [place.geometry.location.lng, place.geometry.location.lat];
+    return newsapi.v2.everything({ q: searchText, pageSize: 10 }).then((placeNewsResult) => {
         const articles = placeNewsResult.articles;
         placeInfo.articles = (articles && articles.length > 0) ? articles : [];
         return new PlaceInfo_1.PlaceInfo(placeInfo).save().then((place) => {
             return bluebird_1.default.resolve(place);
         }).catch((err) => {
-            console.log("SAVE Error", err);
-            return bluebird_1.default.reject({ err: { message: "Internal Server Error" } });
+            // console.log("SAVE Error", err);
+            return bluebird_1.default.reject({ message: "Internal Server Error", code: 500 });
         });
     }).catch((err) => {
-        console.log("Search Error", err);
-        return bluebird_1.default.reject({ err: { message: "Internal Server Error" } });
+        return bluebird_1.default.reject({ message: err.message, code: 500 });
     });
 }
 //# sourceMappingURL=placeInfoController.js.map
