@@ -13,6 +13,8 @@ Object.defineProperty(exports, "__esModule", { value: true });
 const express_1 = __importDefault(require("express"));
 const router = express_1.default.Router();
 const placesInfoController = __importStar(require("../controllers/placeInfoController"));
+const homeController = __importStar(require("../controllers/homeController"));
+router.get("/", homeController.welcomeMsg);
 router.get("/v1/places", placesInfoController.validateSearchedText, placesInfoController.getPlaceInfo);
 exports.default = router;
 //# sourceMappingURL=index.js.map
